@@ -2,12 +2,43 @@
 <html>
 <head>
     <title>Process Monitor</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-    <h2>Process Monitor</h2>
-    <button onclick="loadData()">Refresh</button>
-    <div id="output"></div>
-    <script src="script.js"></script>
+    <div class="app-container">
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <h2>Machines</h2>
+                <button id="refreshBtn" title="Refresh data">↻</button>
+            </div>
+            <div class="sidebar-search"><input id="machineSearch" type="text" placeholder="Search machines..."></div>
+            <ul id="machineList" class="machine-list"></ul>
+        </aside>
+        <main id="mainContent">
+            <div class="main-header">
+                <div class="title-wrap">
+                    <h2 id="pageTitle">Process Monitor</h2>
+                    <div id="selectedMeta" class="meta"></div>
+                </div>
+                <div class="tab-controls" id="viewToggle">
+                    <button id="tab-processes" class="tab active" data-tab="processes">Processes</button>
+                    <button id="tab-resources" class="tab" data-tab="resources">Resources</button>
+                </div>
+                <div class="auto-refresh">
+                    <label><input type="checkbox" id="autoRefreshToggle"> Auto-refresh</label>
+                    <select id="autoRefreshInterval">
+                        <option value="5000">5s</option>
+                        <option value="10000" selected>10s</option>
+                        <option value="30000">30s</option>
+                        <option value="60000">60s</option>
+                    </select>
+                </div>
+            </div>
+            <div id="processToolbar" class="toolbar" style="display:none"></div>
+            <section id="processView" class="view"></section>
+            <section id="resourcesView" class="view" style="display:none"></section>
+        </main>
+    </div>
+    <script src="./scripts.js"></script>
 </body>
 </html>
