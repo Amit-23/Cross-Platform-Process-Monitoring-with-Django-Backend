@@ -7,7 +7,12 @@ const filterState = {
     search: "",
     minCpu: 0,
     minMem: 0,
+    sortBy: "none", // none | cpu | mem | name | pid
 };
+let machineSearchQuery = "";
+let autoRefreshEnabled = false;
+let autoRefreshIntervalMs = 10000;
+let autoRefreshTimer = null;
 
 async function fetchMachines() {
     const res = await fetch(`${API_BASE}/api/processes/latest/`);
@@ -23,20 +28,23 @@ function formatIso(iso) {
 function renderSidebar() {
     const list = document.getElementById("machineList");
     list.innerHTML = "";
-    machinesCache.forEach(m => {
-        const li = document.createElement("li");
-        li.className = `machine-item${m.hostname === selectedHostname ? " active" : ""}`;
-        li.innerHTML = `
-            <div class="machine-name">${m.hostname}</div>
-            <div class="machine-updated" title="Last updated">${formatIso(m.last_updated)}</div>
-        `;
-        li.addEventListener("click", () => {
-            selectedHostname = m.hostname;
-            renderSidebar();
-            renderMain();
+    const query = (machineSearchQuery || "").toLowerCase();
+    machinesCache
+        .filter(m => !query || m.hostname.toLowerCase().includes(query))
+        .forEach(m => {
+            const li = document.createElement("li");
+            li.className = `machine-item${m.hostname === selectedHostname ? " active" : ""}`;
+            li.innerHTML = `
+                <div class="machine-name">${m.hostname}</div>
+                <div class="machine-updated" title="Last updated">${formatIso(m.last_updated)}</div>
+            `;
+            li.addEventListener("click", () => {
+                selectedHostname = m.hostname;
+                renderSidebar();
+                renderMain();
+            });
+            list.appendChild(li);
         });
-        list.appendChild(li);
-    });
 }
 
 function buildProcessTree(processes) {
@@ -67,6 +75,18 @@ function filterTree(nodes, predicate) {
         }
     }
     return result;
+}
+
+function sortTree(nodes, key) {
+    const compare = (a, b) => {
+        if (key === 'cpu') return (b.process.cpu_usage || 0) - (a.process.cpu_usage || 0);
+        if (key === 'mem') return (b.process.memory_usage || 0) - (a.process.memory_usage || 0);
+        if (key === 'name') return String(a.process.name).localeCompare(String(b.process.name));
+        if (key === 'pid') return (a.process.pid || 0) - (b.process.pid || 0);
+        return 0;
+    };
+    nodes.sort(compare);
+    nodes.forEach(n => sortTree(n.children, key));
 }
 
 function countNodes(nodes) {
@@ -197,6 +217,16 @@ function renderProcessToolbar(total, shown) {
             <label for="minMem">Min Mem %</label>
             <input id="minMem" type="number" min="0" max="100" step="0.1" value="${filterState.minMem}">
         </div>
+        <div class="field">
+            <label for="sortBy">Sort</label>
+            <select id="sortBy">
+                <option value="none" ${filterState.sortBy==='none'?'selected':''}>None</option>
+                <option value="cpu" ${filterState.sortBy==='cpu'?'selected':''}>CPU desc</option>
+                <option value="mem" ${filterState.sortBy==='mem'?'selected':''}>Mem desc</option>
+                <option value="name" ${filterState.sortBy==='name'?'selected':''}>Name A→Z</option>
+                <option value="pid" ${filterState.sortBy==='pid'?'selected':''}>PID asc</option>
+            </select>
+        </div>
         <button id="clearFilters">Clear</button>
         <div class="muted">Showing ${shown} of ${total}</div>
     `;
@@ -213,10 +243,15 @@ function renderProcessToolbar(total, shown) {
         filterState.minMem = Number(e.target.value) || 0;
         renderMain();
     });
+    toolbar.querySelector('#sortBy').addEventListener('change', (e) => {
+        filterState.sortBy = e.target.value;
+        renderMain();
+    });
     toolbar.querySelector('#clearFilters').addEventListener('click', () => {
         filterState.search = "";
         filterState.minCpu = 0;
         filterState.minMem = 0;
+        filterState.sortBy = 'none';
         renderMain();
     });
 }
@@ -225,6 +260,37 @@ function hideProcessToolbar() {
     const toolbar = document.getElementById("processToolbar");
     toolbar.style.display = "none";
     toolbar.innerHTML = "";
+}
+
+function applyAutoRefresh() {
+    if (autoRefreshTimer) {
+        clearTimeout(autoRefreshTimer);
+        autoRefreshTimer = null;
+    }
+    if (autoRefreshEnabled) {
+        autoRefreshTimer = setTimeout(async () => {
+            await refreshAll();
+        }, autoRefreshIntervalMs);
+    }
+}
+
+function bindGlobalControls() {
+    const machineSearch = document.getElementById('machineSearch');
+    machineSearch.addEventListener('input', (e) => {
+        machineSearchQuery = e.target.value;
+        renderSidebar();
+    });
+
+    const toggle = document.getElementById('autoRefreshToggle');
+    const intervalSel = document.getElementById('autoRefreshInterval');
+    toggle.addEventListener('change', () => {
+        autoRefreshEnabled = toggle.checked;
+        applyAutoRefresh();
+    });
+    intervalSel.addEventListener('change', () => {
+        autoRefreshIntervalMs = Number(intervalSel.value) || 10000;
+        applyAutoRefresh();
+    });
 }
 
 function renderMain() {
@@ -259,6 +325,7 @@ function renderMain() {
         };
 
         const pruned = filterTree(tree, predicate);
+        if (filterState.sortBy !== 'none') sortTree(pruned, filterState.sortBy);
         renderProcessHeader(processView);
         renderProcessTree(processView, pruned);
         renderProcessToolbar(selected.processes.length, countNodes(pruned));
@@ -294,6 +361,7 @@ async function refreshAll() {
         }
         renderSidebar();
         renderMain();
+        applyAutoRefresh();
     } catch (e) {
         console.error(e);
         alert("Failed to load data. Is the backend running?");
@@ -307,5 +375,6 @@ function bindRefresh() {
 window.addEventListener("DOMContentLoaded", async () => {
     bindTabs();
     bindRefresh();
+    bindGlobalControls();
     await refreshAll();
 });

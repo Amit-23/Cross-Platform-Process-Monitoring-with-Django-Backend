@@ -19,3 +19,21 @@ class Process(models.Model):
 
     def __str__(self):
         return f"Process {self.name} (PID: {self.pid}) on {self.machine.hostname}"
+
+
+class ProcessHistory(models.Model):
+    machine = models.ForeignKey(Machine, related_name='history', on_delete=models.CASCADE)
+    pid = models.IntegerField()
+    name = models.CharField(max_length=255)
+    cpu_usage = models.FloatField()
+    memory_usage = models.FloatField()
+    parent_pid = models.IntegerField(null=True, blank=True)
+    snapshot_time = models.DateTimeField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["machine", "snapshot_time"]),
+        ]
+
+    def __str__(self):
+        return f"Hist {self.name} (PID: {self.pid}) @ {self.snapshot_time} on {self.machine.hostname}"
