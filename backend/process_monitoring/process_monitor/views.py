@@ -6,7 +6,8 @@ from .models import Machine, Process
 from .serializers import MachineSerializer
 import os
 
-API_KEY = os.environ.get("AGENT_API_KEY", "my-secret-key")
+API_KEY = "wedbhhbqwsasbbjsws"
+
 
 @api_view(["POST"])
 def receive_process_data(request):
